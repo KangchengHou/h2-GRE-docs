@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <meta name="author" content="Kangcheng Hou">
+        <link rel="canonical" href="https://kangchenghou.github.io/h2-GRE-docs/ld/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Computing the inverse LD matrix - h2-GRE</title>
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/docco.min.css">
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+        <![endif]-->
+
+        <script src="../js/jquery-1.10.2.min.js" defer></script>
+        <script src="../js/bootstrap-3.0.3.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+            <div class="container">
+
+                <!-- Collapsed navigation -->
+                <div class="navbar-header">
+                    <!-- Expander button -->
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="..">h2-GRE</a>
+                </div>
+
+                <!-- Expanded navigation -->
+                <div class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li >
+                                <a href="..">Home</a>
+                            </li>
+                            <li >
+                                <a href="../input_data/">Input Data</a>
+                            </li>
+                            <li class="dropdown active">
+                                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Estimation <b class="caret"></b></a>
+                                <ul class="dropdown-menu">
+                                    
+<li >
+    <a href="../ols/">OLS regression</a>
+</li>
+                                    
+<li class="active">
+    <a href="./">Computing the inverse LD matrix</a>
+</li>
+                                    
+<li >
+    <a href="../estimate_h2gre/">Calculating the h2gre</a>
+</li>
+                                </ul>
+                            </li>
+                            <li >
+                                <a href="../biobank_demo/">Demo</a>
+                            </li>
+                            <li >
+                                <a href="../simulation/">Simulation</a>
+                            </li>
+                            <li >
+                                <a href="../faq/">FAQ</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav navbar-right">
+                        <li>
+                            <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li >
+                                <a rel="next" href="../ols/">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li >
+                                <a rel="prev" href="../estimate_h2gre/">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="https://github.com/KangchengHou/h2-GRE-docs/edit/master/docs/ld.md"><i class="fa fa-github"></i> Edit on GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="main active"><a href="#computing-chromosome-wide-inverse-ld">Computing chromosome wide inverse LD</a></li>
+            <li><a href="#1-computing-the-mean-and-standard-deviation-of-each-snp-genotype">1. Computing the mean and standard deviation of each SNP genotype</a></li>
+            <li><a href="#2-dividing-the-ld-computations-into-multiple-tasks">2. Dividing the LD computations into multiple tasks</a></li>
+            <li><a href="#3-computing-chromosome-wide-inverse-ld">3. Computing chromosome-wide inverse LD</a></li>
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="computing-chromosome-wide-inverse-ld">Computing chromosome wide inverse LD<a class="headerlink" href="#computing-chromosome-wide-inverse-ld" title="Permanent link">&para;</a></h1>
+<p>h2-GRE requires the inverse LD matrix for each chromosome. For a small set of SNPs, computing the inverse LD matrix is straightforward; for example, given a genotype matrix in PLINK format,</p>
+<pre><code class="python">from pysnptools.snpreader import Bed
+import numpy as np
+from scipy import linalg
+
+genotype = Bed('/path/to/bfile', count_A1=False).read().val
+ld = np.corrcoef(genotype)
+inv_ld = linalg.pinv(ld)
+</code></pre>
+
+<p>However, there are typically up to ~60K genotyped SNPs per chromosome and &gt;100K individuals. In order to compute LD in memory, we divide the above into the several steps and parallelize over chunks of SNPs.</p>
+<p>The following code computes the LD and inverse LD of a genotype matrix (in PLINK format). We assume that the genotype file only contains the information for one chromosome and the results will be at <code>ld_dir</code>.</p>
+<p>We will use the following variables below:</p>
+<ul>
+<li><code>ld_dir</code>: location where our results store</li>
+<li><code>bfile</code>: plink genotype file for <strong>only one</strong> chromosome</li>
+<li><code>mean_chunk_size</code>: when computing mean and standard deviation, how many SNPs we compute at a time, change this parameter according to memory.</li>
+<li><code>ld_chunk_size</code>: when computing the LD, how many SNPs we compute at a time, change this parameter according to memory.  </li>
+</ul>
+<h2 id="1-computing-the-mean-and-standard-deviation-of-each-snp-genotype">1. Computing the mean and standard deviation of each SNP genotype<a class="headerlink" href="#1-computing-the-mean-and-standard-deviation-of-each-snp-genotype" title="Permanent link">&para;</a></h2>
+<p>The mean and standard deviation of each genotype column is needed to standardize the genotype matrix.</p>
+<pre><code class="bash"># when number of individuals = ~350K, setting mean_chunk_size=500 takes up about 8G memory
+python gre.py mean-std --bfile=${bfile} --chunk-size=${mean_chunk_size} --ld-dir=${ld_dir}
+</code></pre>
+
+<h2 id="2-dividing-the-ld-computations-into-multiple-tasks">2. Dividing the LD computations into multiple tasks<a class="headerlink" href="#2-dividing-the-ld-computations-into-multiple-tasks" title="Permanent link">&para;</a></h2>
+<p>Next, we compute the LD matrix which has dimensions number-of-SNPs x number-of-SNPs. 
+For example, we can cut the large task of computing a 60k x 60k SNP covariance matrix into 3600 small tasks, each of which computes a 1k x 1k SNP covariance matrix.</p>
+<pre><code class="bash"># this step will create a file `part.info` in ${ld_dir}, which contains the information for each sub-task
+python gre.py cut-ld --bfile=${bfile} --chunk-size=${ld_chunk_size} --ld-dir=${ld_dir}
+python gre.py check-ld ${ld_dir}
+</code></pre>
+
+<p>Now we compute covariance matrix for each part. You can compute the covariance matrix sequentially as follows:</p>
+<pre><code class="bash">part_num=$(wc -l &lt; ${ld_dir}/part.info)
+for part_i in $(seq 1 ${part_num})
+do
+    python gre.py calc-ld --bfile=${bfile} --part-i=${part_i} --ld-dir=${ld_dir}
+done
+</code></pre>
+
+<h2 id="3-computing-chromosome-wide-inverse-ld">3. Computing chromosome-wide inverse LD<a class="headerlink" href="#3-computing-chromosome-wide-inverse-ld" title="Permanent link">&para;</a></h2>
+<p>We merge the covariance matrices from the previous step to obtain the chromosome-wide LD matrices. First, check if each task is complete. If a task is not complete, check <code>${ld_dir}/part.missing</code> and re-submit these.</p>
+<p>For a 60k x 60k covariance matrix, computing the inverse via singular value decomposition (SVD) takes about 60G memory and 4 hours. For a 10k x 10k covariance matrix, this step requires 6G memory and 1 hour. Note that the memory and time complexity are independent of the number of individuals.</p>
+<pre><code class="bash">part_num=$(wc -l &lt; ${ld_dir}/part.info)
+if [ -e ${ld_dir}/part.missing ]; then
+    rm ${ld_dir}/part.missing
+fi
+for part_i in $(seq 1 ${part_num})
+do
+    if [ ! -e ${ld_dir}/part_${part_i}.npy ]; then
+        echo ${part_i} &gt;&gt; ${ld_dir}/part.missing
+    fi
+done
+
+if [ -e ${ld_dir}/part.missing ]
+then
+    echo &quot;the following parts are missing, please rerun calc_ld.sh&quot;
+    cat ${ld_dir}/part.missing
+else
+    python gre.py merge-ld --bfile=${bfile} --ld-dir=${ld_dir}
+fi
+</code></pre>
+
+<p>After this step, you will see the inverse of LD matrix and the rank in folder <code>${ld_dir}</code>.</p></div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js" defer></script>
+        <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+        <script src="../search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form role="form">
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="Keyboard Shortcuts Modal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title" id="exampleModalLabel">Keyboard Shortcuts</h4>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

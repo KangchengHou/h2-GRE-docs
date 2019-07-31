@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <meta name="author" content="Kangcheng Hou">
+        <link rel="canonical" href="https://kangchenghou.github.io/h2-GRE-docs/biobank_demo/">
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>Demo - h2-GRE</title>
+        <link href="../css/bootstrap-custom.min.css" rel="stylesheet">
+        <link href="../css/font-awesome.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/docco.min.css">
+        <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+        <![endif]-->
+
+        <script src="../js/jquery-1.10.2.min.js" defer></script>
+        <script src="../js/bootstrap-3.0.3.min.js" defer></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script> 
+    </head>
+
+    <body>
+
+        <div class="navbar navbar-default navbar-fixed-top" role="navigation">
+            <div class="container">
+
+                <!-- Collapsed navigation -->
+                <div class="navbar-header">
+                    <!-- Expander button -->
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="..">h2-GRE</a>
+                </div>
+
+                <!-- Expanded navigation -->
+                <div class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li >
+                                <a href="..">Home</a>
+                            </li>
+                            <li >
+                                <a href="../input_data/">Input Data</a>
+                            </li>
+                            <li class="dropdown">
+                                <a href="#" class="dropdown-toggle" data-toggle="dropdown">Estimation <b class="caret"></b></a>
+                                <ul class="dropdown-menu">
+                                    
+<li >
+    <a href="../ols/">OLS regression</a>
+</li>
+                                    
+<li >
+    <a href="../ld/">Computing the inverse LD matrix</a>
+</li>
+                                    
+<li >
+    <a href="../estimate_h2gre/">Calculating the h2gre</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="active">
+                                <a href="./">Demo</a>
+                            </li>
+                            <li >
+                                <a href="../simulation/">Simulation</a>
+                            </li>
+                            <li >
+                                <a href="../faq/">FAQ</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav navbar-right">
+                        <li>
+                            <a href="#" data-toggle="modal" data-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li >
+                                <a rel="next" href="../estimate_h2gre/">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li >
+                                <a rel="prev" href="../simulation/">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="https://github.com/KangchengHou/h2-GRE-docs/edit/master/docs/biobank_demo.md"><i class="fa fa-github"></i> Edit on GitHub</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+                <div class="col-md-3"><div class="bs-sidebar hidden-print affix well" role="complementary">
+    <ul class="nav bs-sidenav">
+        <li class="main active"><a href="#snp-heritability-estimation-for-biobank">SNP-heritability estimation for Biobank</a></li>
+            <li><a href="#data">Data</a></li>
+            <li><a href="#variables-in-the-script">Variables in the script</a></li>
+            <li><a href="#association-summary-statistics">Association summary statistics</a></li>
+            <li><a href="#estimating-using-gre">Estimating  using GRE</a></li>
+            <li><a href="#compute-the-mean-and-standard-deviation-for-each-genotype-file">Compute the mean and standard deviation for each genotype file</a></li>
+    </ul>
+</div></div>
+                <div class="col-md-9" role="main">
+
+<h1 id="snp-heritability-estimation-for-biobank">SNP-heritability estimation for Biobank<a class="headerlink" href="#snp-heritability-estimation-for-biobank" title="Permanent link">&para;</a></h1>
+<p>Now we demonstrate a walkthrough on how to estimate SNP-heritability for GWAS in Biobank scale (e.g. UK Biobank) starting from genotype and phenotype data. </p>
+<h2 id="data">Data<a class="headerlink" href="#data" title="Permanent link">&para;</a></h2>
+<p>Prepare the following data:</p>
+<ul>
+<li><code>all_bfile</code>: Genotype for the <strong>unrelated</strong> individuals in UK Biobank after quality control. This contains genome-wide data in one file.</li>
+<li><code>pheno_file</code>: the phenotype file.</li>
+<li><code>covar_file</code>: the covariates which will be used for association studies.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Data requirement for GRE</p>
+<p>GRE is designed for estimating SNP-heritability at Biobank scale. Only genotyped SNPs should be included. Also make sure that <strong>number of individuals &gt; number of snps on each chromosome</strong>. In our <a href="https://rdcu.be/bMhni">simulation studies</a>, we find when the #individuals=337k, genome-wide #SNPs=600k, largest chromosome #SNPs=60k, GRE works great.</p>
+</div>
+<h2 id="variables-in-the-script">Variables in the script<a class="headerlink" href="#variables-in-the-script" title="Permanent link">&para;</a></h2>
+<p>Here is a summary of variables we will use in the following script and also the file structure we are going to create.</p>
+<div class="admonition note">
+<p class="admonition-title">Note on the scripts</p>
+<p>Note that there are some parameters about the memory and time shown in the scripts below. These parameters are ones we used to perform analyses with data #individuals=337k, #genome-wide SNPs=600k. You might need to tune them according to the size of the data. But be sure to note the consistency. If you have questions, feel free to contact us.</p>
+<p>Also, since h2-GRE is designed to analyze biobank-scale data, we assume you have a computing cluster in your organization. And note that the commands for submitting jobs (we use <code>qsub</code> command) to the computing cluster may vary between different sysmtems.</p>
+</div>
+<h2 id="association-summary-statistics">Association summary statistics<a class="headerlink" href="#association-summary-statistics" title="Permanent link">&para;</a></h2>
+<p>To use GRE, be sure to perform the association studies with <strong>the exactly same genotype</strong> you use to compute the LD. We leave GRE with reference panel LD for future work.</p>
+<p>We compute the OLS sumstats using plink.</p>
+<p>First create a bash script called <code>assoc.sh</code>.</p>
+<pre><code class="bash">#!/bin/sh
+#$ -l h_data=20G,h_rt=24:00:00,highp
+#$ -cwd
+#$ -j y
+#$ -o ./job_out
+#$ -t 1-22:1
+
+source /u/local/Modules/default/init/modules.sh
+module load plink
+
+chr_i=$SGE_TASK_ID
+num_cols=$(head -1 $covar_file | awk '{print NF}')
+num_cols=$((num_cols-2))
+
+mkdir -p ./assoc
+
+plink --bfile ${all_bfile} \
+  --chr $chr_i \
+  --linear hide-covar \
+  --ci 0.95 \
+  --pheno ${pheno_file} \
+  --allow-no-sex \
+  --covar ${covar_file} \
+  --covar-number 1-${num_cols} \
+  --out ./assoc/chr${chr_i}
+</code></pre>
+
+<pre><code class="bash">qsub assoc.sh
+</code></pre>
+
+<p>You should get 22 association file after this step. Each contains the OLS sumstats for SNPs in 22 chromosome.</p>
+<h2 id="estimating-using-gre">Estimating  using GRE<a class="headerlink" href="#estimating-using-gre" title="Permanent link">&para;</a></h2>
+<h3 id="divide-the-genotype-into-22-parts-by-chromosome-using-plink">Divide the genotype into 22 parts by chromosome using plink<a class="headerlink" href="#divide-the-genotype-into-22-parts-by-chromosome-using-plink" title="Permanent link">&para;</a></h3>
+<pre><code class="bash"># now in root directory
+mkdir genotype
+
+for chr_i in $(seq 1 22)
+do
+    plink \
+    --bfile ${all_bfile}
+    --chr ${chr_i}
+    --make-bed
+    --out genotype/chr${chr_i}
+done
+</code></pre>
+
+<h3 id="download-gre">Download GRE<a class="headerlink" href="#download-gre" title="Permanent link">&para;</a></h3>
+<pre><code class="bash">git clone https://github.com/bogdanlab/h2-GRE.git
+</code></pre>
+
+<h3 id="create-22-directory-to-store-intermediate-files-used-by-gre">Create 22 directory to store intermediate files used by GRE<a class="headerlink" href="#create-22-directory-to-store-intermediate-files-used-by-gre" title="Permanent link">&para;</a></h3>
+<pre><code class="bash"># now in root directory
+mkdir ld
+for chr_i in $(seq 1 22)
+do
+    mkdir ld/chr${chr_i}
+done
+</code></pre>
+
+<h2 id="compute-the-mean-and-standard-deviation-for-each-genotype-file">Compute the mean and standard deviation for each genotype file<a class="headerlink" href="#compute-the-mean-and-standard-deviation-for-each-genotype-file" title="Permanent link">&para;</a></h2>
+<p><code>mean_std.sh</code></p>
+<pre><code class="bash">#!/bin/sh
+#$ -cwd
+#$ -j y
+#$ -l h_data=8G,h_rt=1:00:00
+#$ -o ./job_out
+#$ -t 1-22
+
+chr_i=$SGE_TASK_ID
+bfile=./genotype/chr${chr_i}
+ld_dir=./ld/chr${chr_i}
+chunk_size=500
+gre_path=./h2-GRE/gre/gre.py
+python ${gre_path} mean-std --bfile=${bfile} --chunk-size=${chunk_size} --ld-dir=${ld_dir}
+</code></pre>
+
+<pre><code class="bash">qsub mean_std.sh
+</code></pre>
+
+<p>This step will produce a file containing the mean and standard deviation for each genotype file.</p>
+<p>In the following few steps, we compute the LD matrix efficiently. We achieve this by seperating the big task, e.g., computing the 60k x 60k SNP covariance matrix into computing 3600 1k x 1k SNP covariance matrix.</p>
+<h3 id="cutting-the-task-of-computing-ld-matrix-into-several-tasks">Cutting the task of computing LD matrix into several tasks<a class="headerlink" href="#cutting-the-task-of-computing-ld-matrix-into-several-tasks" title="Permanent link">&para;</a></h3>
+<pre><code class="bash">for chr_i in $(seq 1 22)
+do
+    python ${gre_path} cut-ld --bfile ./genotype/chr${chr_i} --chunk-size 1000 --ld-dir ./ld/chr${chr_i}
+    python ${gre_path} check-ld ./ld/chr${chr_i}
+done
+</code></pre>
+
+<p>This will output two files <code>part.info</code>, <code>part.missing</code> in each directory <code>./ld/chr${chr_i}</code>, which specifies the sub tasks needed to compute the LD.</p>
+<h3 id="computing-each-part-of-covariance-matrix">Computing each part of covariance matrix<a class="headerlink" href="#computing-each-part-of-covariance-matrix" title="Permanent link">&para;</a></h3>
+<p>First create two scripts, <code>calc_ld.sh</code>, <code>run_calc_ld.sh</code>.</p>
+<p><code>calc_ld.sh</code></p>
+<pre><code class="bash">#!/bin/sh
+#$ -cwd
+#$ -l h_data=16G,h_rt=0:40:00
+#$ -j y
+#$ -o ./job_out
+
+chr_i=$1
+batch_size=$2
+
+bfile=./genotype/chr${chr_i}
+ld_dir=./ld/${chr_i}
+gre_path=./h2-GRE/gre/gre.py
+for i in $(seq 1 ${batch_size})
+do
+    line=$((SGE_TASK_ID + i - 1))
+    # part.missing contains undone tasks
+    task_id=$(awk 'NR == n' n=$line ${ld_dir}/part.missing)
+    python ${gre_path} calc-ld --bfile=${bfile} --part-i=${task_id} --ld-dir=${ld_dir}
+done
+</code></pre>
+
+<p><code>run_calc_ld.sh</code></p>
+<pre><code class="bash">batch_size=25
+for chr_i in $(seq 1 22)
+do
+    ld_dir=./ld/${chr_i}
+    part_num=$(wc -l &lt; ${ld_dir}/part.missing)
+    if [ ${part_num} -ne 0 ]; then
+        qsub -t 1-${part_num}:${batch_size} calc_ld.sh ${chr_i} ${batch_size}
+    fi
+done
+done
+</code></pre>
+
+<p>Then run the <code>run_calc_ld.sh</code> to submit the jobs.</p>
+<pre><code class="bash">bash run_calc_ld.sh
+</code></pre>
+
+<h3 id="check-if-jobs-are-done-and-resubmit-the-jobs-if-necessary">check if jobs are done and resubmit the jobs if necessary<a class="headerlink" href="#check-if-jobs-are-done-and-resubmit-the-jobs-if-necessary" title="Permanent link">&para;</a></h3>
+<p>Some of jobs might not finish due to slow nodes on the cluster. We update the <code>part.missing</code> list first.</p>
+<pre><code class="bash">for chr_i in $(seq 1 22)
+do
+    python ${gre_path} check-ld --ld-dir ./ld/chr${chr_i}
+done
+</code></pre>
+
+<p>And calculate the ld for each part by <code>bash run_calc_ld.sh</code>. Repeat this until you see no tasks being submitted.</p>
+<h3 id="merging-parts-of-the-covariance-matrix">Merging parts of the covariance matrix<a class="headerlink" href="#merging-parts-of-the-covariance-matrix" title="Permanent link">&para;</a></h3>
+<p>Now we are close to finishing it! We will merge each parts of LD and compute the pseudo-inverse of LD.</p>
+<p><code>merge_ld.sh</code></p>
+<pre><code class="bash">#!/bin/sh
+#$ -cwd
+#$ -j y
+#$ -o ./job_out
+#$ -m a
+
+bfile=$1
+ld_dir=$2
+gre_path=./h2-GRE/gre/gre.py
+python ${gre_path} merge-ld --bfile=${bfile} --ld-dir=${ld_dir}
+</code></pre>
+
+<pre><code class="bash">for chr_i in $(seq 1 22)
+do
+    ld_dir=./ld/chr${chr_i}
+    bfile=./genotype/chr${chr_i}
+    if [ $chr_i -le 6 ]
+    then
+        qsub -l h_data=60G,h_rt=4:00:00,highp merge_ld.sh ${bfile} ${ld_dir}
+    elif [ $chr_i -ge 7 -a $chr_i -le 12 ]
+    then
+        qsub -l h_data=40G,h_rt=3:00:00,highp merge_ld.sh ${bfile} ${ld_dir}
+    elif [ $chr_i -ge 13 -a $chr_i -le 20 ]
+    then
+        qsub -l h_data=24G,h_rt=2:00:00,highp merge_ld.sh ${bfile} ${ld_dir}
+    else
+        qsub -l h_data=10G,h_rt=1:00:00,highp merge_ld.sh ${bfile} ${ld_dir}
+    fi
+done
+</code></pre>
+
+<p>Now we have all the ingredients needed for GRE and we are ready to get the SNP-heritability.</p>
+<h3 id="estimating-snp-heritability">Estimating SNP-heritability<a class="headerlink" href="#estimating-snp-heritability" title="Permanent link">&para;</a></h3>
+<p>Converting the sumstats in plink format into LDSC format.</p>
+<pre><code class="bash">for chr_i in $(seq 1 22)
+do
+    python ./h2-GRE/utils/utils.py sumstats-plink2ldsc --plink-sumstats ./assoc/chr${chr_i}.assoc.linear --legend ./genotype/chr${chr_i}.bim --out ./assoc/chr${chr_i}.ldsc.txt
+done
+</code></pre>
+
+<p>Estimate SNP-heritability</p>
+<p><code>estimate.sh</code></p>
+<pre><code class="bash">#!/bin/sh
+#$ -cwd
+#$ -l h_data=24G,h_rt=2:00:00,highp
+#$ -j y
+#$ -o ./job_out
+#$ -t 1-22:1
+
+chr_i=${SGE_TASK_ID}
+legend=./genotype/chr${chr_i}.bim
+ld_dir=./ld/chr${chr_i}
+sumstats=./assoc/chr${chr_i}.ldsc.txt
+python gre.py estimate --legend=${legend} --ld-dir=${ld_dir} --sumstats=${sumstats} &gt; ./estimate/chr${chr_i}.txt
+</code></pre>
+
+<pre><code class="bash">qsub estimate.sh
+</code></pre>
+
+<p><code>./estimate/chr${chr_i}.txt</code> contains the estimate and standard deviation of GRE for each chromosome. Adding these up provides you the genome-wide SNP-heritability!</p></div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js" defer></script>
+        <script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_HTML" defer></script>
+        <script src="../search/main.js" defer></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="Search Modal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title" id="exampleModalLabel">Search</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+                    From here you can search these documents. Enter
+                    your search terms below.
+                </p>
+                <form role="form">
+                    <div class="form-group">
+                        <input type="text" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="Keyboard Shortcuts Modal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                <h4 class="modal-title" id="exampleModalLabel">Keyboard Shortcuts</h4>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
